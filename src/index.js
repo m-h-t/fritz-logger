@@ -6,9 +6,7 @@ import fs from 'fs';
 import FritzBoxAPI from '../../fritz-box';
 
 import _ from 'lodash';
-import Moment from 'moment-timezone';
 import request from 'request';
-
 import feathers from 'feathers/client';
 import rest from 'feathers-rest/client';
 
@@ -40,7 +38,7 @@ const run = async () => {
             const connectedClients = await box.getConnectedClients();
             debug.verbose(`Connected clients: ${connectedClients.length}. Fetching details`);
 
-            const now = Moment().tz(config.timezone).format();
+            const now = new Date().toISOString();
 
             // Get client details, use MAC as id
             const clients = await Promise.all(connectedClients.map(async (client) => {
