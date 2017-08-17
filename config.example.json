@@ -1,0 +1,14 @@
+{
+    "fritzbox": {
+        "host": "fritz.box",
+        "password": "secret",
+        "username": "user",
+        "allowSelfSignedCertificate": true,
+        "ssl": false
+    },
+    "feathers": {
+        "url": "http://localhost:3030"
+    },
+    "loggingInterval": 10,
+    "timezone": "Europe/Berlin"
+}
