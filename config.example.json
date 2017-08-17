@@ -9,6 +9,6 @@
     "feathers": {
         "url": "http://localhost:3030"
     },
-    "loggingInterval": 10,
+    "loggingInterval": 120,
     "timezone": "Europe/Berlin"
 }

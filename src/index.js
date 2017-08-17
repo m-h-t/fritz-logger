@@ -1,3 +1,6 @@
+import Debug from 'debug-levels';
+const debug = Debug('fritz-logger');
+
 import fs from 'fs';
 // const FritzBoxAPI = require('fritz-box');
 import FritzBoxAPI from '../../fritz-box';
@@ -11,9 +14,6 @@ import rest from 'feathers-rest/client';
 
 import config from '../config.json';
 
-import Debug from 'debug-levels';
-const debug = Debug('fritz-logger')
-
 const client = feathers();
 const restClient = rest(config.feathers.url);
 
@@ -23,21 +23,24 @@ const metrics = client.service('metrics');
 const box = new FritzBoxAPI(config.fritzbox);
 
 const run = async () => {
-    debug.log('Running...');
-
     try {
+        debug.log('Requesting fritzbox session');
         await box.getSession();
+        debug.log('Received session');
     } catch (e) {
         debug.error(e);
     }
 
-    let lastClients;
-    let lastDatapoint;
+    const clientDatapointId = new Map();
+    let newClients, knownClients, lastKnownClients = [];
 
     setInterval(async () => {
         try {
-            const now = Moment().tz(config.timezone).format();
+            debug.verbose('Getting connected clients');
             const connectedClients = await box.getConnectedClients();
+            debug.verbose(`Connected clients: ${connectedClients.length}. Fetching details`);
+
+            const now = Moment().tz(config.timezone).format();
 
             // Get client details, use MAC as id
             const clients = await Promise.all(connectedClients.map(async (client) => {
@@ -45,27 +48,33 @@ const run = async () => {
                 return { id: mac, name };
             }));
 
-            debug.info(clients);
+            newClients = _.differenceBy(clients, lastKnownClients, 'id');
+            newClients.length && debug.log(`New clients: ${newClients.length}. Creating datapoints`);
 
-            if (_.isEqual(lastClients, clients)) {
-                metrics.patch(lastDatapoint._id, { timestampEnd: now });
-            } else {
-                lastClients = clients;
-
+            newClients.forEach(async ({ id, name }) => {
                 const datapoint = {
                     timestamp: now,
                     sensorId: 'fritzbox-router',
-                    type: 'wlan-clients',
-                    clients
+                    type: 'wlan-client',
+                    client: { id, name }
                 };
 
-                lastDatapoint = await metrics.create(datapoint);
-                debug.info(lastDatapoint);
-            }
+                const { _id: datapointId } = await metrics.create(datapoint);
+                clientDatapointId.set(id, datapointId);
+            });
+
+            knownClients = _.intersectionBy(clients, lastKnownClients, 'id');
+            knownClients.length && debug.log(`Previously known clients: ${knownClients.length}. Updating datapoints`);
+
+            knownClients.forEach(({ id, name }) => {
+                metrics.patch(clientDatapointId.get(id), { timestampEnd: now });
+            });
+
+            lastKnownClients = clients;
         } catch (e) {
             debug.error(e);
 
-            // Reauthenticate if session dead
+            // Reauthenticate if session is dead
             if (e.status == 403) {
                 await box.getSession();
             }
